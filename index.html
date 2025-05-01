@@ -1,18 +1,64 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
   <head>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
     <title>Socket.IO chat</title>
     <style>
-      body { margin: 0; padding-bottom: 3rem; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+      body {
+        margin: 0;
+        padding-bottom: 3rem;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Helvetica, Arial, sans-serif;
+      }
 
-      #form { background: rgba(0, 0, 0, 0.15); padding: 0.25rem; position: fixed; bottom: 0; left: 0; right: 0; display: flex; height: 3rem; box-sizing: border-box; backdrop-filter: blur(10px); }
-      #input { border: none; padding: 0 1rem; flex-grow: 1; border-radius: 2rem; margin: 0.25rem; }
-      #input:focus { outline: none; }
-      #form > button { background: #333; border: none; padding: 0 1rem; margin: 0.25rem; border-radius: 3px; outline: none; color: #fff; }
+      #form {
+        background: rgba(0, 0, 0, 0.15);
+        padding: 0.25rem;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        display: flex;
+        height: 3rem;
+        box-sizing: border-box;
+        backdrop-filter: blur(10px);
+      }
+      #input {
+        border: none;
+        padding: 0 1rem;
+        flex-grow: 1;
+        border-radius: 2rem;
+        margin: 0.25rem;
+      }
+      #input:focus {
+        outline: none;
+      }
+      #form > button {
+        background: #333;
+        border: none;
+        padding: 0 1rem;
+        margin: 0.25rem;
+        border-radius: 3px;
+        outline: none;
+        color: #fff;
+      }
 
-      #messages { list-style-type: none; margin: 0; padding: 0; }
-      #messages > li { padding: 0.5rem 1rem; }
-      #messages > li:nth-child(odd) { background: #efefef; }
+      #messages {
+        list-style-type: none;
+        margin: 0;
+        padding: 0;
+      }
+      #messages > li {
+        padding: 0.5rem 1rem;
+      }
+      #messages > li:nth-child(odd) {
+        background: #efefef;
+      }
+
+      .notify {
+        font-style: italic;
+        color: gray;
+      }
     </style>
   </head>
   <body>
@@ -20,28 +66,79 @@
     <form id="form" action="">
       <input id="input" autocomplete="off" /><button>Send</button>
     </form>
+    <button id="disconnectBtn" style="margin: 1rem">Desconectar</button>
     <script src="/socket.io/socket.io.js"></script>
-
     <script>
-      var socket = io();
+      let counter = 0;
+      let username = "";
+      while (!username) {
+        username = prompt("Escribe tu nombre:");
+        if (username === null) break;
+      }
+      if (!username) {
+        alert("Debes introducir un nombre para entrar al chat.");
+        // Desactivar formulario si no hay nombre
+        document.getElementById("form").remove();
+        document.getElementById("disconnectBtn").remove();
+        throw new Error("Usuario canceló el nombre");
+      }
 
-      var messages = document.getElementById('messages');
-      var form = document.getElementById('form');
-      var input = document.getElementById('input');
+      const socket = io({
+        auth: {
+          serverOffset: 0,
+        },
+        ackTimeout: 10000,
+        retries: 3,
+      });
 
-      form.addEventListener('submit', function(e) {
+      const form = document.getElementById("form");
+      const input = document.getElementById("input");
+      const messages = document.getElementById("messages");
+
+      socket.emit("user joined", username);
+
+      form.addEventListener("submit", (e) => {
         e.preventDefault();
         if (input.value) {
-          socket.emit('chat message', input.value);
-          input.value = '';
+          const clientOffset = `${socket.id}-${counter++}`;
+          input.value = "";
         }
       });
 
-      socket.on('chat message', function(msg) {
-        var item = document.createElement('li');
+      socket.on("chat message", (msg, serverOffset) => {
+        const item = document.createElement("li");
         item.textContent = msg;
         messages.appendChild(item);
         window.scrollTo(0, document.body.scrollHeight);
+        socket.auth.serverOffset = serverOffset;
+      });
+
+      socket.on("notify", (msg) => {
+        const item = document.createElement("li");
+        item.textContent = msg;
+        item.classList.add("notify");
+        messages.appendChild(item);
+        window.scrollTo(0, document.body.scrollHeight);
+      });
+
+      const disconnectBtn = document.getElementById("disconnectBtn");
+      let isDisconnected = false;
+
+      disconnectBtn.addEventListener("click", () => {
+        if (!isDisconnected) {
+          socket.emit("user left", username);
+          socket.disconnect();
+          isDisconnected = true;
+          input.disabled = true;
+          form.querySelector("button").disabled = true;
+          disconnectBtn.disabled = true;
+          alert("Conexión cerrada");
+        }
+      });
+
+      // Si cierra pestaña
+      window.addEventListener("beforeunload", () => {
+        socket.emit("user left", username);
       });
     </script>
   </body>
